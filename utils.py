@@ -2,49 +2,56 @@ import json
 
 import requests
 
-GITHUB_URL = "https://api.github.com/"
+GITHUB_BASE_API_URL = "https://api.github.com"
+
+GITHUB_USER_API_URL = "{base_url}/users/{0}"
+GITHUB_USER_REPO_API_URL = "{base_url}/users/{0}/repos?type=owner&sort=updated"
+GITHUB_REPO_COMMITS_API_URL = "{base_url}/repos/{0}/commits"
+
+possible_positions = ['committer', 'author']
 
 
-def __get_json_response(url):
-    response = requests.get(url)
-    return json.loads(response.text)
-
-
-def __get_github_emails(user):
+def get_api_response(url):
     try:
-        users_profile_url = GITHUB_URL + "users/{0}".format(user)
-        response = __get_json_response(users_profile_url)
+        response = requests.get(url)
+        if response.ok:
+            return response.json()
+    except Exception:
+        return None
+    return None
 
-        # some error encountered
-        if 'message' in response:
-            if response['message'] == 'Not Found':
-                return u'You need to enter a valid GitHub Username'
-            else:
-                return response['message']
 
-        user_name = response['name']
+def get_email(username):
+    users_profile_url = GITHUB_USER_API_URL.format(username, base_url=GITHUB_BASE_API_URL)
+    response = get_api_response(users_profile_url)
 
-        # if user has a public email, add that to the set of emails
-        if response['email']:
-            return response['email']
+    if not response:
+        return None
 
-        users_repository_url = GITHUB_URL + "users/{0}/repos?type=owner&sort=updated".format(user)
-        response = __get_json_response(users_repository_url)
+    # if user has a public email, add that to the set of emails
+    if response['email']:
+        return response['email']
 
-        for repo in response:
-            if not repo['fork']:
-                users_repository_name = repo['full_name']
-                repos_commit_url = GITHUB_URL + "repos/{0}/commits".format(users_repository_name)
-                commit_reponse = __get_json_response(repos_commit_url)
+    user_name = response['name']
+    users_repository_url = GITHUB_USER_REPO_API_URL.format(username, base_url=GITHUB_BASE_API_URL)
+    response = get_api_response(users_repository_url)
 
-                possible_positions = ['committer', 'author']
+    if not response:
+        # No public source repository
+        return None
 
-                for commit in commit_reponse:
-                    for i in possible_positions:
-                        if commit['commit'][i]['name'] == user_name:
-                            email_string = commit['commit'][i]['email']
-                            if "noreply" not in email_string:
-                                return email_string
+    for repo in response:
+        if not repo['fork']:
+            users_repository_name = repo['full_name']
+            repos_commit_url = GITHUB_REPO_COMMITS_API_URL.format(users_repository_name, base_url=GITHUB_BASE_API_URL)
+            commit_response = get_api_response(repos_commit_url)
 
-    except requests.exceptions.ConnectionError:
-        return u'Proper internet connection not found'
+            if not commit_response:
+                continue
+
+            for commit in commit_response:
+                for position in possible_positions:
+                    if commit['commit'][position]['name'] == user_name:
+                        email_string = commit['commit'][position]['email']
+                        if "noreply" not in email_string:
+                            return email_string
