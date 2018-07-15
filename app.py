@@ -1,7 +1,7 @@
 import json
 import os
 
-from flask import Flask, abort, Response
+from flask import Flask, jsonify
 from flask_cors import CORS, cross_origin
 from utils import get_email
 
@@ -18,6 +18,7 @@ def main(github_username):
     if not os.path.exists(EMAIL_FILE):
         with open(EMAIL_FILE, 'w+') as f:
             json.dump({}, f)
+
     with open(EMAIL_FILE, 'r+') as f:
         email_dict = json.load(f)
 
@@ -46,7 +47,17 @@ def get_all():
 
     with open(EMAIL_FILE, 'r+') as f:
         email_dict = json.load(f)
-    return json.dumps(email_dict)
+    return jsonify(email_dict)
+
+
+@app.route("/", methods=["GET"])
+@cross_origin()
+def home_route():
+    response = {
+        "message": "Email missing. Usage <url>/<github_username>",
+        "repository_url": "https://github.com/prabhakar267/github-email-extractor"
+    }
+    return jsonify(response), 200
 
 
 if __name__ == "__main__":

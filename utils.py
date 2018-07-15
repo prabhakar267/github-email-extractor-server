@@ -1,5 +1,5 @@
-import json
-
+import logging
+import os
 import requests
 
 GITHUB_BASE_API_URL = "https://api.github.com"
@@ -9,14 +9,26 @@ GITHUB_USER_REPO_API_URL = "{base_url}/users/{0}/repos?type=owner&sort=updated"
 GITHUB_REPO_COMMITS_API_URL = "{base_url}/repos/{0}/commits"
 
 possible_positions = ['committer', 'author']
+master_username = os.environ.get("GITHUB_USERNAME")
+master_password = os.environ.get("GITHUB_PASSWORD")
 
 
 def get_api_response(url):
     try:
-        response = requests.get(url)
+        use_credentials = True if os.environ.get('USE_CREDENTIALS', "0") == "1" else False
+        if use_credentials:
+            response = requests.get(url, auth=(master_username, master_password))
+        else:
+            response = requests.get(url)
+
+        if response.status_code == 401:
+            logging.error("Invalid Credentials. Disabling for future")
+            os.environ['USE_CREDENTIALS'] = "0"
+            return get_api_response(url)
         if response.ok:
             return response.json()
-    except Exception:
+    except Exception as e:
+        logging.exception(e)
         return None
     return None
 
@@ -30,6 +42,7 @@ def get_email(username):
 
     # if user has a public email, add that to the set of emails
     if response['email']:
+        logging.info("Public email found for user")
         return response['email']
 
     user_name = response['name']
@@ -37,7 +50,7 @@ def get_email(username):
     response = get_api_response(users_repository_url)
 
     if not response:
-        # No public source repository
+        logging.error("No public source repository for user")
         return None
 
     for repo in response:
@@ -55,3 +68,6 @@ def get_email(username):
                         email_string = commit['commit'][position]['email']
                         if "noreply" not in email_string:
                             return email_string
+
+    logging.error("No email found in {} source repositories".format(len(response)))
+    return None
