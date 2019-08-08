@@ -3,6 +3,7 @@ import os
 
 from flask import Flask, jsonify
 from flask_cors import CORS, cross_origin
+
 from utils import get_email
 
 app = Flask(__name__)

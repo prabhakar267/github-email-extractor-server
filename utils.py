@@ -1,5 +1,6 @@
 import logging
 import os
+
 import requests
 
 GITHUB_BASE_API_URL = "https://api.github.com"
