@@ -12,6 +12,12 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 
 DEFAULT_EXPIRATION = 5184000  # 60 days
 
+redis_url = os.getenv('REDISCLOUD_URL')
+if redis_url:
+    r = redis.Redis.from_url(redis_url, decode_responses=True)
+else:
+    r = redis.Redis(decode_responses=True)
+
 
 def _get_key(username):
     default_key_prefix = "githubExtractor"
@@ -54,11 +60,5 @@ def home_route():
 
 
 if __name__ == "__main__":
-    redis_url = os.getenv('REDISCLOUD_URL')
-    if redis_url:
-        r = redis.Redis.from_url(redis_url, decode_responses=True)
-    else:
-        r = redis.Redis(decode_responses=True)
-
     is_debug = os.getenv("IS_DEBUG", True)
     app.run(debug=is_debug, host="0.0.0.0", threaded=True)
