@@ -1,6 +1,6 @@
-import json
 import os
 
+import redis
 from flask import Flask, jsonify
 from flask_cors import CORS, cross_origin
 
@@ -10,45 +10,37 @@ app = Flask(__name__)
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 
-EMAIL_FILE = "email_file.json"
+DEFAULT_EXPIRATION = 5184000  # 60 days
+
+
+def _get_key(username):
+    default_key_prefix = "githubExtractor"
+    return "{}-{}".format(default_key_prefix, username.lower())
 
 
 @app.route("/<string:github_username>", methods=['GET'])
 @cross_origin()
 def main(github_username):
-    if not os.path.exists(EMAIL_FILE):
-        with open(EMAIL_FILE, 'w+') as f:
-            json.dump({}, f)
-
-    with open(EMAIL_FILE, 'r+') as f:
-        email_dict = json.load(f)
-
     # check if the email was found earlier or not
-    if email_dict.get(github_username):
-        return email_dict[github_username]
-    response = get_email(github_username)
+    redis_key = _get_key(github_username)
+    response = r.get(redis_key)
+    if not response:
+        response = get_email(github_username)
+        if response:
+            r.set(redis_key, response, ex=DEFAULT_EXPIRATION)
     if response:
-        # add email to be used in future
-        email_dict[github_username] = response
-        with open(EMAIL_FILE, 'w+') as f:
-            json.dump(email_dict, f)
-
         return "{0}".format(response), 200
     else:
         return "Invalid Request", 400
 
 
-@app.route("/get-all", methods=["GET"])
+@app.route("/explore", methods=["GET"])
 @cross_origin()
 def get_all():
-    email_dict = {}
-    if not os.path.exists(EMAIL_FILE):
-        with open(EMAIL_FILE, 'w+') as f:
-            json.dump(email_dict, f)
-
-    with open(EMAIL_FILE, 'r+') as f:
-        email_dict = json.load(f)
-    return jsonify(email_dict)
+    all_emails = {}
+    for item in r.scan_iter(_get_key("*")):
+        all_emails[item] = r[item]
+    return jsonify(all_emails)
 
 
 @app.route("/", methods=["GET"])
@@ -58,8 +50,15 @@ def home_route():
         "message": "Email missing. Usage <url>/<github_username>",
         "repository_url": "https://github.com/prabhakar267/github-email-extractor"
     }
-    return jsonify(response), 200
+    return jsonify(response), 404
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", threaded=True)
+    redis_url = os.getenv('REDISCLOUD_URL')
+    if redis_url:
+        r = redis.Redis.from_url(redis_url, decode_responses=True)
+    else:
+        r = redis.Redis(decode_responses=True)
+
+    is_debug = os.getenv("IS_DEBUG", True)
+    app.run(debug=is_debug, host="0.0.0.0", threaded=True)
