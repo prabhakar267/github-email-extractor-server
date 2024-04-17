@@ -5,7 +5,7 @@ entrypoints==0.3
 flake8==3.7.8
 Flask==2.3.2
 Flask-Cors==3.0.9
-gunicorn==19.9.0
+gunicorn==22.0.0
 idna==2.8
 itsdangerous==1.1.0
 Jinja2==3.1.3
